@@ -253,13 +253,25 @@ def get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, 
     return new_value * 1.07 # multiply by 1.1 to adjust for the offset
 
 def main():
+    # Take the picture of the gauge and save it as gauge-1.jpg
+    cap = cv2.VideoCapture(0)
+    cap.set(3,640) #width=640
+    cap.set(4,480) #height=480
+
+    img = None
+    if cap.isOpened():
+        _, frame = cap.read()
+        cap.release() #releasing camera immediately after capturing picture
+        if _ and frame is not None:
+            img = frame
+            cv2.imwrite('gauge-1.jpg', img)
+
     gauge_number = 1
     file_type='jpg'
     # name the calibration image of your gauge 'gauge-#.jpg', for example 'gauge-5.jpg'.  It's written this way so you can easily try multiple images
     min_angle, max_angle, min_value, max_value, units, x, y, r = calibrate_gauge(gauge_number, file_type)
 
     #feed an image (or frame) to get the current value, based on the calibration, by default uses same image as calibration
-    img = cv2.imread('gauge-%s.%s' % (gauge_number, file_type))
     val = get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, gauge_number, file_type)
     print("Current reading: %s %s" %(val, units))
 

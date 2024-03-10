@@ -2,11 +2,15 @@
 Copyright (c) 2017 Intel Corporation.
 Licensed under the MIT license. See LICENSE file in the project root for full license information.
 '''
+import os
 
 import cv2
 import numpy as np
-#import paho.mqtt.client as mqtt
+
 import time
+import telegram
+
+bot = telegram.Bot(token="")
 
 def avg_circles(circles, b):
     avg_x=0
@@ -37,20 +41,19 @@ def calibrate_gauge(gauge_number, file_type):
         It will return the min value with angle in degrees (as a tuple), the max value with angle in degrees (as a tuple),
         and the units (as a string).
     '''
-
-    img = cv2.imread('gauge-%s.%s' %(gauge_number, file_type))
+    img = cv2.imread('gauge-%s.%s' % (gauge_number, file_type))
     height, width = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  #convert to gray
     gray = cv2.GaussianBlur(gray, (5, 5), 0)
     gray = cv2.medianBlur(gray, 5)
 
     #for testing, output gray image
-    cv2.imwrite('gauge-%s-bw.%s' %(gauge_number, file_type),gray)
+    # cv2.imwrite('gauge-%s-bw.%s' %(gauge_number, file_type),gray)
 
     #detect circles
     #restricting the search from 35-48% of the possible radii gives fairly good results across different samples.  Remember that
     #these are pixel values which correspond to the possible radii search range.
-    circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 20, np.array([]), 100, 50, int(height*0.2), int(height*0.6))
+    circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 20, np.array([]), 100, 50, int(height*0.1), int(height*0.9))
     # average found circles, found it to be more accurate than trying to tune HoughCircles parameters to get just the right one
     a, b, c = circles.shape
     x,y,r = avg_circles(circles, b)
@@ -60,8 +63,7 @@ def calibrate_gauge(gauge_number, file_type):
     cv2.circle(img, (x, y), 2, (0, 255, 0), 3, cv2.LINE_AA)  # draw center of circle
 
     #for testing, output circles on image
-    cv2.imwrite('gauge-%s-circles.%s' % (gauge_number, file_type), img)
-
+    # cv2.imwrite('gauge-%s-circles.%s' % (gauge_number, file_type), img)
 
     #for calibration, plot lines from center going out at every 10 degrees and add marker
     #for i from 0 to 36 (every 10 deg)
@@ -111,7 +113,7 @@ def calibrate_gauge(gauge_number, file_type):
     # units = input('Enter units: ')
 
     #for testing purposes: hardcode and comment out raw_inputs above
-    min_angle = 44
+    min_angle = 36
     max_angle = 318
     min_value = 0
     max_value = 4
@@ -127,23 +129,20 @@ def get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, 
     gray2 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Set threshold and maxValue
-    thresh = 175
+    thresh = 100
     maxValue = 255
 
     # for testing purposes, found cv2.THRESH_BINARY_INV to perform the best
-    # th, dst2 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_BINARY);
+    #th, dst1 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_BINARY);
     th, dst2 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_BINARY_INV);
-    # th, dst3 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_TRUNC);
-    # th, dst4 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_TOZERO);
-    # th, dst5 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_TOZERO_INV);
-    # cv2.imwrite('gauge-%s-dst1.%s' % (gauge_number, file_type), dst1)
-    # cv2.imwrite('gauge-%s-dst2.%s' % (gauge_number, file_type), dst2)
-    # cv2.imwrite('gauge-%s-dst3.%s' % (gauge_number, file_type), dst3)
-    # cv2.imwrite('gauge-%s-dst4.%s' % (gauge_number, file_type), dst4)
-    # cv2.imwrite('gauge-%s-dst5.%s' % (gauge_number, file_type), dst5)
-
-    # apply thresholding which helps for finding lines
-    # th, dst2 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_BINARY_INV);
+    #th, dst3 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_TRUNC);
+    #th, dst4 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_TOZERO);
+    #th, dst5 = cv2.threshold(gray2, thresh, maxValue, cv2.THRESH_TOZERO_INV);
+    #cv2.imwrite('gauge-%s-dst1.%s' % (gauge_number, file_type), dst1)
+    cv2.imwrite('gauge-%s-dst2.%s' % (gauge_number, file_type), dst2)
+    #cv2.imwrite('gauge-%s-dst3.%s' % (gauge_number, file_type), dst3)
+    #cv2.imwrite('gauge-%s-dst4.%s' % (gauge_number, file_type), dst4)
+    #cv2.imwrite('gauge-%s-dst5.%s' % (gauge_number, file_type), dst5)
 
     # found Hough Lines generally performs better without Canny / blurring, though there were a couple exceptions where it would only work with Canny / blurring
     # dst2 = cv2.medianBlur(dst2, 5)
@@ -154,8 +153,8 @@ def get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, 
     cv2.imwrite('gauge-%s-tempdst2.%s' % (gauge_number, file_type), dst2)
 
     # find lines
-    minLineLength = 100
-    maxLineGap = 10
+    minLineLength = 70
+    maxLineGap = 5
     lines = cv2.HoughLinesP(image=dst2, rho=3, theta=np.pi / 180, threshold=100, minLineLength=minLineLength, maxLineGap=maxLineGap)  # rho is set to 3 to detect more lines, easier to get more then filter them out later
 
     #for testing purposes, show all found lines
@@ -198,6 +197,9 @@ def get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, 
     #     cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
     # assumes the first line is the best one
+    if not len(final_line_list):
+        bot.send_message("", f"x No lines found")
+        return exit(0)
     x1 = final_line_list[0][0]
     y1 = final_line_list[0][1]
     x2 = final_line_list[0][2]
@@ -250,13 +252,29 @@ def get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, 
     new_range = (new_max - new_min)
     new_value = (((old_value - old_min) * new_range) / old_range) + new_min
 
-    return new_value * 1.07 # multiply by 1.1 to adjust for the offset
+    return new_value * 1.1 # multiply to adjust for the offset
+
+def center_crop(img, dim):
+	"""Returns center cropped image
+	Args:
+	img: image to be center cropped
+	dim: dimensions (width, height) to be cropped
+	"""
+	width, height = img.shape[1], img.shape[0]
+
+	# process crop width and height for max available dimension
+	crop_width = dim[0] if dim[0]<img.shape[1] else img.shape[1]
+	crop_height = dim[1] if dim[1]<img.shape[0] else img.shape[0] 
+	mid_x, mid_y = int(width/2) - 120, int(height/2) + 100
+	cw2, ch2 = int(crop_width/2), int(crop_height/2) 
+	crop_img = img[mid_y-ch2:mid_y+ch2, mid_x-cw2:mid_x+cw2]
+	return crop_img
 
 def main():
     # Take the picture of the gauge and save it as gauge-1.jpg
     cap = cv2.VideoCapture(0)
-    cap.set(3,640) #width=640
-    cap.set(4,480) #height=480
+    cap.set(3, 1280) #width=640
+    cap.set(4, 960) #height=480
 
     img = None
     if cap.isOpened():
@@ -264,10 +282,11 @@ def main():
         cap.release() #releasing camera immediately after capturing picture
         if _ and frame is not None:
             img = frame
-            cv2.imwrite('gauge-1.jpg', img)
-
+    
+    img = center_crop(img, (600, 600))
     gauge_number = 1
     file_type='jpg'
+    cv2.imwrite('gauge-%s.%s' % (gauge_number, file_type), img)
     # name the calibration image of your gauge 'gauge-#.jpg', for example 'gauge-5.jpg'.  It's written this way so you can easily try multiple images
     min_angle, max_angle, min_value, max_value, units, x, y, r = calibrate_gauge(gauge_number, file_type)
 
@@ -276,6 +295,8 @@ def main():
     print("Current reading: %s %s" %(val, units))
     with open('gauge-reading.txt', 'a') as f:
         f.write(f"{time.time()} {val} {units}\n")
-
+    
+    bot.send_photo("", photo=open(f'gauge-{gauge_number}-lines-2.{file_type}', 'rb'), caption=str(round(val, 3)))
+    
 if __name__=='__main__':
     main()

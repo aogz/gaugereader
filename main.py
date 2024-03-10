@@ -274,6 +274,8 @@ def main():
     #feed an image (or frame) to get the current value, based on the calibration, by default uses same image as calibration
     val = get_current_value(img, min_angle, max_angle, min_value, max_value, x, y, r, gauge_number, file_type)
     print("Current reading: %s %s" %(val, units))
+    with open('gauge-reading.txt', 'a') as f:
+        f.write(f"{time.time()} {val} {units}\n")
 
 if __name__=='__main__':
     main()
